@@ -7,7 +7,7 @@ import { fromUint8Array, toUint8Array } from "js-base64";
 
 const server = Server.configure({
   name: "hocuspocus-fra1-01",
-  port: 1236,
+  port: 1239,
   onStoreDocument,
   onLoadDocument,
   timeout: 30000,
@@ -18,7 +18,7 @@ const server = Server.configure({
     const { token } = data;
     // Example test if a user is authenticated with a token passed from the client
     console.log(token);
-    if (token !== "super-secret-token") {
+    if (token !== "super") {
       throw new Error("Not authorized!");
     }
 
@@ -44,8 +44,8 @@ const { app } = expressWebsockets(express());
 // Note: make sure to include a parameter for the document name.
 // You can set any contextual data like in the onConnect hook
 // and pass it to the handleConnection method.
-app.ws("/document/:id", (websocket, request) => {
-  console.log(request.params.id);
+app.ws("/document/:docId", (websocket, request) => {
+  console.log(request.params.docId);
   const context = {
     user: {
       id: 1234,
@@ -61,27 +61,22 @@ app.listen(1237, () => console.log("Listening on http://127.0.0.1:1237"));
 async function onStoreDocument(incomingData) {
   const { documentName, document } = incomingData;
   if (!documentName) return Promise.resolve();
-  const documentId = parseInt(documentName, 10);
   const state = Y.encodeStateAsUpdate(document);
   const dbDocument = fromUint8Array(state);
   return await axios.post("http://localhost:3333/doc/update", {
-    name: documentName,
+    docId: documentName,
     text: dbDocument,
-    groupId: "64f6f9cea55d9034ab23937d",
   });
 }
 
 async function onLoadDocument(incomingData) {
   const { documentName, document } = incomingData;
   if (!documentName) return Promise.resolve();
-  const groupId = `64f6f9cea55d9034ab23937d`;
   const documentFromDB = (
-    await axios.get(
-      `http://localhost:3333/doc/single/${groupId} ${documentName}`
-    )
+    await axios.get(`http://localhost:3333/doc/single/${documentName}`)
   ).data;
   console.log("docfromdb", documentFromDB);
-  if (documentFromDB) {
+  if (documentFromDB && documentFromDB.text) {
     const dbDocument = toUint8Array(documentFromDB.text || "");
     if (dbDocument) Y.applyUpdate(document, dbDocument);
     return document;
