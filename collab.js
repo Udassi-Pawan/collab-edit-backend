@@ -3,10 +3,11 @@ import expressWebsockets from "express-ws";
 import { Server } from "@hocuspocus/server";
 import * as Y from "yjs";
 import axios from "axios";
-import { fromUint8Array, toUint8Array } from "js-base64";
+import "dotenv/config";
 
+import { fromUint8Array, toUint8Array } from "js-base64";
 const server = Server.configure({
-  name: "hocuspocus-fra1-01",
+  name: process.env.HOCUS_POCUS_SERVER_NAME,
   port: 1239,
   onStoreDocument,
   onLoadDocument,
@@ -16,54 +17,29 @@ const server = Server.configure({
   quiet: true,
   async onAuthenticate(data) {
     const { token } = data;
-    // Example test if a user is authenticated with a token passed from the client
-    console.log(token);
-    if (token !== "super") {
+    if (token !== process.env.SECRET) {
       throw new Error("Not authorized!");
     }
-
-    // You can set contextual data to use it in other hooks
-    return {
-      user: {
-        id: 1234,
-        name: "John",
-      },
-    };
-  },
-  beforeHandleMessage(data) {
-    // console.log("data", data.context);
   },
 });
 
 server.listen();
 
-// Setup your express instance using the express-ws extension
 const { app } = expressWebsockets(express());
 
-// Add a websocket route for Hocuspocus
-// Note: make sure to include a parameter for the document name.
-// You can set any contextual data like in the onConnect hook
-// and pass it to the handleConnection method.
 app.ws("/document/:docId", (websocket, request) => {
   console.log(request.params.docId);
-  const context = {
-    user: {
-      id: 1234,
-      name: "Jane",
-    },
-  };
-  server.handleConnection(websocket, request, context);
+  server.handleConnection(websocket, request);
 });
 
-// Start the server
-app.listen(1237, () => console.log("Listening on http://127.0.0.1:1237"));
+app.listen(1237, () => console.log("Listening on port 1237"));
 
 async function onStoreDocument(incomingData) {
   const { documentName, document } = incomingData;
   if (!documentName) return Promise.resolve();
   const state = Y.encodeStateAsUpdate(document);
   const dbDocument = fromUint8Array(state);
-  return await axios.post("http://localhost:3333/doc/update", {
+  return await axios.post(`${process.env.BACKEND_URL}/doc/update`, {
     docId: documentName,
     text: dbDocument,
   });
@@ -73,9 +49,8 @@ async function onLoadDocument(incomingData) {
   const { documentName, document } = incomingData;
   if (!documentName) return Promise.resolve();
   const documentFromDB = (
-    await axios.get(`http://localhost:3333/doc/single/${documentName}`)
+    await axios.get(`${process.env.BACKEND_URL}/doc/single/${documentName}`)
   ).data;
-  console.log("docfromdb", documentFromDB);
   if (documentFromDB && documentFromDB.text) {
     const dbDocument = toUint8Array(documentFromDB.text || "");
     if (dbDocument) Y.applyUpdate(document, dbDocument);
